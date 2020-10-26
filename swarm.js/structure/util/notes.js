@@ -32,15 +32,15 @@ let address = swarm.wallet.pubKey();
 without even connecting to the network, our wallet already have some functionality
 */
 
-let address = wallet.sign();
-let address = wallet.recover();
+let signed = swarm.sign(data);
+let address = swarm.recover(data);
 
 /*
 once connected, we have could have much more...
 */
 
-let address = wallet.sendBase(100);
-let address = wallet.sendBzz(1000);
+let tx1 = wallet.sendBase(recipientAddress, 100);
+let tx2 = wallet.sendBzz(recipientAddress, 1000);
 //...
 
 /*
@@ -55,7 +55,6 @@ there are more intricate schemes for this and it would bear some refinement - se
 
 let swarm = new Swarm('password');
 
-let password = swarm.wallet.signSecure('password');
 let mnemonic = swarm.wallet.backup('password');
 
 /*
@@ -70,7 +69,7 @@ chunk.download();
 
 /*
 as well as normal content addressed chunks, we provide facilities to generate SOC's
-this is where most of the power of Swarm exists. 
+this is where a lot of the power of Swarm.js lies. 
 SOC's are an incredibly powerful tool for app development and a lot of applications
 can be entirely powered by create schemes based around SOC's.
 */
@@ -91,20 +90,23 @@ but there is a powerful api underlying this that gives access to
 a myriad of intracacies and special abilities.
 */
 
+soc.prev().get('some-key'); // 'value'
+
 soc.collection('some-key').history();
 
 {
 	salt: "ab2e...", //default salt is always a value generated deterministically from the wallet private key, see 'codename siana' for details
 	index: "last", //a timeseries is the best way to determine the last value created
-	pin: "always", //it is also possible to only pin the latest chunk
+	pin: "always", //it is also possible to only pin the latest chunk to save money if old values are not required
 	chunks: { //this is the history of all chunks
 		{
 			address: "",
 			topic: "",
 			identifier: "",
 			mimeType: "string",
-			payload: false //in some cases chunks will not yet be cached locally
-			state: false
+			payload: "value",//in some cases chunks will not yet be cached locally
+			state: "sent",
+			pinnedTTL: ""
 		},
 		{
 			address: "",
@@ -112,13 +114,11 @@ soc.collection('some-key').history();
 			identifier: "",
 			mimeType: "string",
 			payload: "" //in some cases chunks will only exist in theory
-			state: "stored"
+			state: "sent",
+			pinnedTTL: ""
 		}
 	}
 }
-
-
-soc.prev().get('some-key'); // 'value'
 
 /*
 as well as the usual timeseries feeds, it is also possible to work
@@ -127,18 +127,18 @@ with integer indexed collections
 
 let soc = new swarm.SOC('topic', {
 	index: 'integer',
-	salt: 'some-magic-salt'
+	salt: 'some-magic-salt',
+	encryption: 'none'
 });
 
 soc.create(0, 'hello world');
-
 soc.create(1, 'welcome to the swarm');
 
 /*
 this leads to interesting possibilites, as we can be very specific about 
 the location that the chunks fall in the network
 the outcome of this is that application developer can build their
-data chunk schemes in a way that allows user to predict the location
+data chunk schemes in a way that allows user to predict the exact location
 of each other's chunks
 */
 let chunkOwnerAddress = 'abc123...';
@@ -156,31 +156,32 @@ socReader.at(1).download(); // 'welcome to the swarm'
 so far we only used simple text strings as our payload
 but Swarm.js is clever enough to be able to recognise different
 data and process it accordingly
-there is also a pluggable architecture to design your own
+there is also a pluggable architecture to design your own chunk series types
 */
 
 let soc = new swarm.SOC('my-pics', {
 	index: 'integer'
 });
 
-soc.upload(pic1);
-soc.upload(pic2);
-soc.upload(pic3);
+//pic1, ... could be browser File objects for example...
+
+soc.create(0,pic1);
+soc.create(1,pic2);
+soc.create(2,pic3);
 
 soc.get('my-pics');
 
 {
-	salt: "ab2e...", //default salt is always a value generated deterministically from the wallet private key, see 'codename siana' for details
-	index: "my-pics", //a timeseries is the best way to determine the last value created
+	index: "integer",
 	pin: "always", //it is also possible to only pin the latest chunk
 	chunks: {
 		{
 			address: "",
 			topic: "",
 			identifier: 0,
-			mimeType: false,
-			payload: false,
-			state: false
+			mimeType: "image/png",
+			payload: File('pic1.png'),
+			state: "stored"
 		},
 		{
 			address: "",
@@ -202,8 +203,19 @@ soc.get('my-pics');
 }
 
 /*
-so far we only used simple text strings as our payload
-but Swarm.js is clever enough to be able to recognise different
-data and process it accordingly
-there is also a pluggable architecture to design your own
+power users who want to define their own chunks which are not part of
+a supported series can simply specify the exact identifier
 */
+
+let soc = new swarm.SOC('my-pics', {
+	id: 0
+});
+
+
+/*
+eagle eyed observers will have noticed a reference to encryption
+when defining a single owner collection above
+because all data is public in swarm, Swarm.js defaults to using encryption schemes
+*/
+
+
